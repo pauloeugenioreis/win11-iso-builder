@@ -25,7 +25,7 @@ ao lado do destino e removidos no final. Não use `/tmp` como saída se ele for 
 ## Uso
 
 ```bash
-cp config.env.example config.env   # preencha PRODUCT_KEY e LOCAL_USER
+# usa a chave, a edição e o usuário definidos em config.env
 ./win11-iso-builder.sh ~/Downloads/Windows11_Client_x64_pt-pt_26300_9457.iso
 ```
 
@@ -88,4 +88,4 @@ Se a conta for criada sem senha, o Windows entra direto nela; defina a senha dep
 |---|---|
 | `win11-iso-builder.sh` | Script principal |
 | `templates/autounattend.xml` | Modelo do arquivo de resposta (`@PRODUCT_KEY@`, `@LOCAL_USER@`, `@LOCAL_PASSWORD@`) |
-| `config.env.example` | Exemplo de configuração; copie para `config.env` (não versionado, contém a chave) |
+| `config.env` | Configuração padrão: chave do produto, edição, conta local e pasta de saída |

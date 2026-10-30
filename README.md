@@ -10,7 +10,8 @@ O particionamento continua **manual**: o instalador pergunta em qual disco insta
 apagado sem confirmação. Idioma, região, teclado e telas de privacidade também seguem
 interativos.
 
-Roda no Linux, sem root.
+Roda no Linux, sem root (`win11-iso-builder.sh`), ou no Windows, como administrador
+(`win11-iso-builder.ps1` — veja [Windows](#windows)).
 
 ## Requisitos
 
@@ -55,6 +56,38 @@ mudar chave, edição ou usuário, parta da ISO oficial.
 
 Para listar as edições de uma ISO: monte-a e rode `wimlib-imagex info <montagem>/sources/install.wim`.
 
+## Windows
+
+`win11-iso-builder.ps1` faz o mesmo no Windows 10/11, com PowerShell 5.1 ou 7, e usa o mesmo
+`config.env` e o mesmo template. Precisa de:
+
+- PowerShell **como administrador** (o DISM exige);
+- `oscdimg.exe`, do [Windows ADK](https://learn.microsoft.com/windows-hardware/get-started/adk-install)
+  — basta o componente **Deployment Tools**.
+
+Antes de mexer em qualquer ISO o script confere as dependências: privilégio de administrador,
+cmdlets do DISM e de montagem (`Get-WindowsImage`, `Split-WindowsImage`, `Mount-DiskImage`…),
+`robocopy`, o template e o espaço livre (~2× o tamanho da ISO). Se o `oscdimg.exe` não estiver
+no `PATH` nem na pasta padrão do ADK, ele **oferece instalar só o Deployment Tools** — pelo
+`winget` (`Microsoft.WindowsADK`) ou, sem ele, baixando o `adksetup.exe` oficial da Microsoft e
+conferindo a assinatura digital antes de executá-lo. Com `-y` instala sem perguntar.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\win11-iso-builder.ps1 $HOME\Downloads\Windows11_Client_x64_pt-pt_26300_9457.iso
+
+# opções equivalentes às do script bash (-k, -e, -u, -p, -o, -c), aceita curingas;
+# -y instala o Windows ADK sem perguntar, se faltar
+.\win11-iso-builder.ps1 -k XXXXX-XXXXX-XXXXX-XXXXX-XXXXX -u Paulo $HOME\Downloads\Windows11_*.iso
+```
+
+Diferenças em relação à versão Linux:
+
+- monta a ISO com `Mount-DiskImage` (ela não pode estar montada antes), copia com `robocopy` e
+  divide o `install.wim` com `Split-WindowsImage` (DISM);
+- se a ISO tiver `install.esd`, que o DISM não divide, só a edição escolhida é exportada para
+  `.wim` antes da divisão;
+- a ISO é gerada pelo `oscdimg` em UDF 1.02, também bootável em BIOS e UEFI.
+
 ## O que o script faz
 
 1. Monta a ISO via loop somente leitura com `udisksctl` (as ISOs da Microsoft são UDF; a parte
@@ -86,6 +119,7 @@ Se a conta for criada sem senha, o Windows entra direto nela; defina a senha dep
 
 | Arquivo | Conteúdo |
 |---|---|
-| `win11-iso-builder.sh` | Script principal |
+| `win11-iso-builder.sh` | Script principal (Linux) |
+| `win11-iso-builder.ps1` | Versão para Windows (PowerShell) |
 | `templates/autounattend.xml` | Modelo do arquivo de resposta (`@PRODUCT_KEY@`, `@LOCAL_USER@`, `@LOCAL_PASSWORD@`) |
 | `config.env` | Configuração padrão: chave do produto, edição, conta local e pasta de saída |

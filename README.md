@@ -1,1 +1,85 @@
 # win11-iso-builder
+
+Gera, a partir das ISOs oficiais do Windows 11, ISOs que:
+
+- instalam **uma edição fixa** (padrão: Professional) já com a **chave do produto** informada;
+- criam uma **conta local de administrador**, sem exigir conta Microsoft nem internet no OOBE;
+- aceitam a EULA automaticamente.
+
+O particionamento continua **manual**: o instalador pergunta em qual disco instalar, nada é
+apagado sem confirmação. Idioma, região, teclado e telas de privacidade também seguem
+interativos.
+
+Roda no Linux, sem root.
+
+## Requisitos
+
+```bash
+sudo apt install udisks2 wimtools xorriso rsync
+```
+
+Espaço livre: cerca de 2× o tamanho da ISO (~18 GB) no disco da pasta de saída — o conteúdo é
+copiado para uma pasta temporária `.work_*` ao lado da ISO gerada, removida no final. Não use
+`/tmp` como saída se ele for tmpfs.
+
+## Uso
+
+```bash
+cp config.env.example config.env   # preencha PRODUCT_KEY e LOCAL_USER
+./win11-iso-builder.sh ~/Downloads/Windows11_Client_x64_pt-pt_26300_9457.iso
+```
+
+Ou tudo pela linha de comando (as opções têm precedência sobre o `config.env`):
+
+```bash
+./win11-iso-builder.sh -k XXXXX-XXXXX-XXXXX-XXXXX-XXXXX -u Paulo \
+    ~/Downloads/Windows11_Client_x64_en-us_*.iso ~/Downloads/Windows11_Client_x64_pt-pt_*.iso
+```
+
+| Opção | Descrição |
+|---|---|
+| `-k`, `--key` | Chave do produto (obrigatória) |
+| `-e`, `--edition` | EditionID a instalar — `Professional`, `Core`, `Education`, `ProfessionalWorkstation`… (padrão `Professional`) |
+| `-u`, `--user` | Nome da conta local de administrador (obrigatório, até 20 caracteres) |
+| `-p`, `--password` | Senha da conta local (padrão: sem senha) |
+| `-o`, `--output` | Pasta de saída (padrão: a mesma da ISO original) |
+| `-c`, `--config` | Arquivo de configuração (padrão: `config.env` ao lado do script) |
+
+A ISO gerada recebe o nome da original com `_Client_` trocado pela edição, por exemplo
+`Windows11_Professional_x64_pt-pt_26300_9457.iso`. A original nunca é alterada.
+
+Para listar as edições de uma ISO: monte-a e rode `wimlib-imagex info <montagem>/sources/install.wim`.
+
+## O que o script faz
+
+1. Monta a ISO via loop somente leitura com `udisksctl` (as ISOs da Microsoft são UDF; a parte
+   ISO 9660 só contém um `README.TXT`, então `xorriso -indev` não serve para ler o conteúdo).
+2. Copia tudo menos o `install.wim` para a pasta de trabalho.
+3. Divide o `install.wim` em `install.swm`, `install2.swm`… de 3800 MB. O instalador do Windows
+   lê `.swm` nativamente; assim nenhum arquivo passa de 4 GB, a ISO dispensa UDF e o conteúdo
+   pode ser copiado para um pendrive FAT32.
+4. Grava:
+   - `sources/ei.cfg` — fixa a edição (`[EditionID]`, canal Retail);
+   - `sources/PID.txt` — chave do produto, para o instalador não perguntar;
+   - `autounattend.xml` na raiz — gerado de [`templates/autounattend.xml`](templates/autounattend.xml).
+5. Gera a ISO com `xorriso` (ISO 9660 nível 3 + Joliet), bootável em BIOS
+   (`boot/etfsboot.com`) e UEFI (`efi/microsoft/boot/efisys.bin`).
+
+## Conta local
+
+A partir dos builds 26xxx a Microsoft removeu os atalhos usados no OOBE
+(`oobe\bypassnro`, `start ms-cxh:localonly`). O método que continua funcionando é o
+`autounattend.xml` declarar a conta em `UserAccounts/LocalAccounts` no passo `oobeSystem` —
+o OOBE então pula a tela de conta. O template ainda grava `BypassNRO=1` no registro (passo
+`specialize`) para não exigir rede, nos builds em que isso ainda vale.
+
+Se a conta for criada sem senha, o Windows entra direto nela; defina a senha depois em
+**Configurações → Contas → Opções de entrada**.
+
+## Arquivos
+
+| Arquivo | Conteúdo |
+|---|---|
+| `win11-iso-builder.sh` | Script principal |
+| `templates/autounattend.xml` | Modelo do arquivo de resposta (`@PRODUCT_KEY@`, `@LOCAL_USER@`, `@LOCAL_PASSWORD@`) |
+| `config.env.example` | Exemplo de configuração; copie para `config.env` (não versionado, contém a chave) |

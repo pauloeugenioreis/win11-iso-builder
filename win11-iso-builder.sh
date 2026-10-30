@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Gera ISOs do Windows 11 que instalam uma edição fixa com a chave informada
-# e criam uma conta local (sem exigir conta Microsoft no OOBE).
+# Reconstrói ISOs do Windows 11, mantendo o nome do arquivo, para instalarem uma
+# edição fixa com a chave informada e criarem uma conta local (sem conta Microsoft no OOBE).
 #
 # Uso: ./win11-iso-builder.sh [opções] <iso> [<iso>...]
 set -euo pipefail
@@ -24,7 +24,7 @@ Opções:
   -e, --edition ID        EditionID a instalar (padrão: Professional)
   -u, --user NOME         nome da conta local de administrador (obrigatório)
   -p, --password SENHA    senha da conta local (padrão: sem senha)
-  -o, --output DIR        pasta de saída (padrão: pasta da ISO original)
+  -o, --output DIR        grava em outra pasta (padrão: substitui a ISO original)
   -c, --config ARQUIVO    arquivo de configuração (padrão: config.env ao lado do script)
   -h, --help              mostra esta ajuda
 
@@ -90,13 +90,15 @@ done
 LOOP_DEV=""
 MNT=""
 WORK=""
+TMP_ISO=""
 cleanup() {
     [[ -n $WORK && -d $WORK ]] && rm -rf "$WORK"
+    [[ -n $TMP_ISO && -f $TMP_ISO ]] && rm -f "$TMP_ISO"
     if [[ -n $LOOP_DEV ]]; then
         udisksctl unmount -b "$LOOP_DEV" > /dev/null 2>&1 || true
         udisksctl loop-delete -b "$LOOP_DEV" > /dev/null 2>&1 || true
     fi
-    LOOP_DEV=""; WORK=""
+    LOOP_DEV=""; WORK=""; TMP_ISO=""
 }
 trap cleanup EXIT
 
@@ -125,14 +127,9 @@ build_iso() {
     iso=$(realpath "$iso")
     outdir=${OUTPUT_DIR:-$(dirname "$iso")}
     mkdir -p "$outdir"
+    # A ISO gerada mantém o nome da original; sem -o, ela substitui a original
     name=$(basename "$iso" .iso)
-    if [[ $name == *_Client_* ]]; then
-        name=${name/_Client_/_${EDITION}_}
-    else
-        name=${name}_${EDITION}
-    fi
     out="$outdir/$name.iso"
-    [[ $out != "$iso" ]] || die "a ISO de saída sobrescreveria a original: $out"
 
     log "Montando $(basename "$iso")"
     mount_iso "$iso"
@@ -141,7 +138,7 @@ build_iso() {
 
     wim="$src/sources/install.wim"
     [[ -f $wim ]] || wim="$src/sources/install.esd"
-    [[ -f $wim ]] || die "install.wim/install.esd não encontrado em $iso"
+    [[ -f $wim ]] || die "install.wim/install.esd não encontrado em $iso (ISO já processada?)"
     wimlib-imagex info "$wim" | grep -qx "Edition ID: *$EDITION" ||
         die "a edição '$EDITION' não existe em $(basename "$iso")"
 
@@ -170,11 +167,15 @@ build_iso() {
         -e "s|@LOCAL_PASSWORD@|$pass|" \
         "$TEMPLATE" > "$WORK/autounattend.xml"
 
+    # Gera num arquivo temporário e só troca pelo destino no final, para que
+    # uma falha no meio do caminho nunca deixe a ISO original corrompida
+    TMP_ISO="$outdir/.$name.iso.tmp"
     log "Gerando $out"
     xorriso -as mkisofs -quiet -iso-level 3 -J -joliet-long -r -V "${label:-WIN11}" \
         -b boot/etfsboot.com -no-emul-boot -boot-load-size 8 \
         -eltorito-alt-boot -e efi/microsoft/boot/efisys.bin -no-emul-boot \
-        -o "$out" "$WORK"
+        -o "$TMP_ISO" "$WORK"
+    mv -f "$TMP_ISO" "$out"
 
     cleanup
     log "Pronta: $out"

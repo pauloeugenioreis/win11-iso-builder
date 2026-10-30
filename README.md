@@ -19,8 +19,8 @@ sudo apt install udisks2 wimtools xorriso rsync
 ```
 
 Espaço livre: cerca de 2× o tamanho da ISO (~18 GB) no disco da pasta de saída — o conteúdo é
-copiado para uma pasta temporária `.work_*` ao lado da ISO gerada, removida no final. Não use
-`/tmp` como saída se ele for tmpfs.
+copiado para uma pasta temporária `.work_*` e a nova ISO é gerada em `.<nome>.iso.tmp`, ambos
+ao lado do destino e removidos no final. Não use `/tmp` como saída se ele for tmpfs.
 
 ## Uso
 
@@ -42,11 +42,16 @@ Ou tudo pela linha de comando (as opções têm precedência sobre o `config.env
 | `-e`, `--edition` | EditionID a instalar — `Professional`, `Core`, `Education`, `ProfessionalWorkstation`… (padrão `Professional`) |
 | `-u`, `--user` | Nome da conta local de administrador (obrigatório, até 20 caracteres) |
 | `-p`, `--password` | Senha da conta local (padrão: sem senha) |
-| `-o`, `--output` | Pasta de saída (padrão: a mesma da ISO original) |
+| `-o`, `--output` | Grava a ISO gerada em outra pasta (padrão: substitui a original) |
 | `-c`, `--config` | Arquivo de configuração (padrão: `config.env` ao lado do script) |
 
-A ISO gerada recebe o nome da original com `_Client_` trocado pela edição, por exemplo
-`Windows11_Professional_x64_pt-pt_26300_9457.iso`. A original nunca é alterada.
+A ISO gerada **mantém o nome da original**. Sem `-o`, ela **substitui a original** — guarde uma
+cópia se quiser preservá-la, ou use `-o <pasta>` para gravar em outro lugar. A troca só
+acontece depois que a nova ISO foi gerada por completo; se algo falhar no meio, a original
+fica intacta.
+
+Uma ISO já processada não pode ser processada de novo (o `install.wim` virou `.swm`); para
+mudar chave, edição ou usuário, parta da ISO oficial.
 
 Para listar as edições de uma ISO: monte-a e rode `wimlib-imagex info <montagem>/sources/install.wim`.
 
@@ -63,7 +68,8 @@ Para listar as edições de uma ISO: monte-a e rode `wimlib-imagex info <montage
    - `sources/PID.txt` — chave do produto, para o instalador não perguntar;
    - `autounattend.xml` na raiz — gerado de [`templates/autounattend.xml`](templates/autounattend.xml).
 5. Gera a ISO com `xorriso` (ISO 9660 nível 3 + Joliet), bootável em BIOS
-   (`boot/etfsboot.com`) e UEFI (`efi/microsoft/boot/efisys.bin`).
+   (`boot/etfsboot.com`) e UEFI (`efi/microsoft/boot/efisys.bin`), num arquivo temporário que
+   então substitui o destino.
 
 ## Conta local
 
